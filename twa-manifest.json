@@ -1,0 +1,58 @@
+{
+  "packageId": "ng.mutan.member",
+  "host": "member.mutan-coop.ng",
+  "name": "MUTAN Cooperative",
+  "launcherName": "MUTAN",
+  "display": "standalone",
+  "themeColor": "#0F5132",
+  "themeColorDark": "#0F5132",
+  "navigationColor": "#0F5132",
+  "navigationColorDark": "#0F5132",
+  "navigationDividerColor": "#0F5132",
+  "navigationDividerColorDark": "#0F5132",
+  "backgroundColor": "#0F5132",
+  "enableNotifications": false,
+  "startUrl": "/onboarding",
+  "iconUrl": "https://member.mutan-coop.ng/icon-512.png",
+  "maskableIconUrl": "https://member.mutan-coop.ng/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "mutan-member"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard"
+    },
+    {
+      "name": "Savings",
+      "short_name": "Savings",
+      "url": "/savings"
+    },
+    {
+      "name": "Pay",
+      "short_name": "Pay",
+      "url": "/payments"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://member.mutan-coop.ng/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1"
+}

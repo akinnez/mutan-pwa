@@ -1,0 +1,1 @@
+export type Step = 'identify' | 'otp' | 'setup' | 'login' | 'forgot-otp' | 'forgot-reset'
