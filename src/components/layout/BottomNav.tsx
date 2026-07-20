@@ -1,13 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, PiggyBank, CreditCard, TrendingUp, User } from 'lucide-react'
+import { Home, PiggyBank, CreditCard, PieChart, User } from 'lucide-react'
 
 const NAV = [
   { label: 'Home', href: '/dashboard', icon: Home },
   { label: 'Savings', href: '/savings', icon: PiggyBank },
   { label: 'Loans', href: '/loans', icon: CreditCard },
-  { label: 'Invest', href: '/investments', icon: TrendingUp },
+  { label: 'Shares', href: '/shares', icon: PieChart },
   { label: 'Profile', href: '/profile', icon: User },
 ]
 

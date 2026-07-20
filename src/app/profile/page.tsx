@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  TrendingUp,
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -242,6 +244,34 @@ export default function ProfilePage() {
             <span
               className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform shadow-sm ${smsOptIn ? "translate-x-6" : "translate-x-0.5"}`}
             />
+          </button>
+        </div>
+
+        {/* Investments */}
+        <div className="card overflow-hidden">
+          <div
+            className="px-4 py-3 border-b"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <p className="text-xs font-semibold" style={{ color: "var(--forest)" }}>
+              INVESTMENTS
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/investments")}
+            className="w-full flex items-center px-4 py-3.5 hover:bg-gray-50 transition-colors"
+          >
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center mr-3"
+              style={{ background: "var(--forest-light)" }}
+            >
+              <TrendingUp size={15} style={{ color: "var(--forest)" }} />
+            </div>
+            <div className="flex-1 text-left">
+              <span className="text-sm font-medium block">My Investments</span>
+              <span className="text-xs text-gray-400">View rounds, returns and investment history</span>
+            </div>
+            <ChevronRight size={16} className="text-gray-300" />
           </button>
         </div>
 

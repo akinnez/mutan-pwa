@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 import { useQuery } from "@tanstack/react-query";
 import { investmentsApi } from "../../lib/api/investments";
 import { PageHeader } from "../../components/layout/PageHeader";

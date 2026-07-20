@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { sharesApi } from "../../lib/api/shares";
