@@ -101,11 +101,6 @@ export default function RootLayout({
         <Providers>{children}</Providers>
         {/* Service Worker registration */}
         <Script src="/sw-register.js" strategy="afterInteractive" />
-        {/* Paystack inline checkout — used by the "Pay Direct" flow */}
-        <Script
-          src="https://js.paystack.co/v1/inline.js"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

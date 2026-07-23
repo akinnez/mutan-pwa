@@ -1,8 +1,7 @@
 "use client";
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Script from "next/script";
 import { memberApi } from "../../lib/api/member";
 import { useAuthStore } from "../../lib/stores/auth.store";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -26,14 +25,6 @@ const PAYMENT_TYPES = [
   { value: "wallet_topup", label: "Wallet Top-up" },
 ];
 
-declare global {
-  interface Window {
-    PaystackPop?: {
-      setup: (config: Record<string, any>) => { openIframe: () => void };
-    };
-  }
-}
-
 function PaymentsPageInner() {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
@@ -42,7 +33,6 @@ function PaymentsPageInner() {
   const [showPayDirect, setShowPayDirect] = useState(false);
   const [confirmingDeclare, setConfirmingDeclare] = useState(false);
   const [confirmingPayDirect, setConfirmingPayDirect] = useState(false);
-  const [paystackReady, setPaystackReady] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
@@ -188,23 +178,16 @@ function PaymentsPageInner() {
         }),
       }),
     onSuccess: (res) => {
-      const { reference } = res.data?.data ?? res.data;
-      launchPaystackPopup(reference);
-    },
-    onError: (e: any) => {
-      toast.error(e.response?.data?.message ?? "Could not start payment");
-      setConfirmingPayDirect(false);
-    },
-  });
-
-  const verifyMutation = useMutation({
-    mutationFn: (reference: string) => memberApi.verifyPaystack(reference),
-    onSuccess: () => {
-      toast.success("Payment received — your account has been credited");
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["subscriptions"] });
-      qc.invalidateQueries({ queryKey: ["my-payments"] });
-      qc.invalidateQueries({ queryKey: ["loan-status"] });
+      const data = res.data?.data ?? res.data;
+      const { authorization_url } = data;
+      if (!authorization_url) {
+        toast.error("Could not get payment link — please try again.");
+        setConfirmingPayDirect(false);
+        return;
+      }
+      // Backend already initialized with Paystack — open their hosted
+      // payment page. The webhook handles the result automatically;
+      // no manual verify call needed from the frontend.
       setShowPayDirect(false);
       setConfirmingPayDirect(false);
       setPayDirectForm({
@@ -214,40 +197,14 @@ function PaymentsPageInner() {
         target_scheme_id: "",
         target_loan_id: "",
       });
+      toast.success("Opening payment page…");
+      window.open(authorization_url, "_blank", "noopener,noreferrer");
     },
-    onError: () => {
-      toast.error(
-        "Payment may still be processing — check back shortly, or contact the admin with your reference.",
-      );
+    onError: (e: any) => {
+      toast.error(e.response?.data?.message ?? "Could not start payment");
       setConfirmingPayDirect(false);
     },
   });
-
-  function launchPaystackPopup(reference: string) {
-    if (!paystackReady || !window.PaystackPop) {
-      toast.error(
-        "Payment widget is still loading — please wait a moment and try again.",
-      );
-      setConfirmingPayDirect(false);
-      return;
-    }
-    const email = user?.email || `${user?.mutan_id}@mutan.coop`;
-    const handler = window.PaystackPop.setup({
-      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      email,
-      amount: Math.round(parseFloat(payDirectForm.amount) * 100), // kobo
-      ref: reference,
-      currency: "NGN",
-      callback: (response: { reference: string }) => {
-        verifyMutation.mutate(response.reference);
-      },
-      onClose: () => {
-        setConfirmingPayDirect(false);
-        toast("Payment cancelled", { icon: "ℹ️" });
-      },
-    });
-    handler.openIframe();
-  }
 
   const canPayDirect =
     payDirectForm.amount &&
@@ -258,8 +215,7 @@ function PaymentsPageInner() {
     (payDirectForm.payment_type !== "loan_repayment" ||
       activeLoan?.has_active_loan);
 
-  const payDirectBusy =
-    initializeMutation.isPending || verifyMutation.isPending;
+  const payDirectBusy = initializeMutation.isPending;
 
   const currentMonth = new Date().toLocaleString("default", {
     month: "long",
@@ -268,22 +224,6 @@ function PaymentsPageInner() {
 
   return (
     <div>
-      {/* Load Paystack inline.js only when the Pay Direct sheet is opened —
-          not on every page load. This stops the script from calling
-          app.paystack.co on mount and avoids the 400 error on the
-          payments page before the member has done anything. */}
-      {showPayDirect && (
-        <Script
-          src="https://js.paystack.co/v1/inline.js"
-          strategy="afterInteractive"
-          onLoad={() => setPaystackReady(true)}
-          onError={() =>
-            toast.error(
-              "Payment widget failed to load — check your connection and try again.",
-            )
-          }
-        />
-      )}
       <PageHeader
         title="Payments"
         subtitle="Manual payments"
@@ -388,224 +328,209 @@ function PaymentsPageInner() {
       {/* ── Pay Direct Sheet ──────────────────────────────────────────────── */}
       <BottomSheet
         open={showPayDirect}
-        onClose={() => {
-          setShowPayDirect(false);
-          setPaystackReady(false);
-        }}
+        onClose={() => setShowPayDirect(false)}
         title="Pay Direct"
       >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setConfirmingPayDirect(true);
-          }}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium mb-2">
-                What are you paying for?
-              </label>
-              <div className="grid grid-cols-1 gap-2">
-                {PAYMENT_TYPES.map((pt) => (
-                  <button
-                    key={pt.value}
-                    type="button"
-                    onClick={() =>
-                      setPayDirectForm((f) => ({
-                        ...f,
-                        payment_type: pt.value as any,
-                        is_directed: false,
-                        target_scheme_id: "",
-                      }))
-                    }
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm text-left transition-all"
-                    style={{
-                      borderColor:
-                        payDirectForm.payment_type === pt.value
-                          ? "var(--forest)"
-                          : "#e2e8f0",
-                      background:
-                        payDirectForm.payment_type === pt.value
-                          ? "var(--forest-light)"
-                          : "#fff",
-                      color:
-                        payDirectForm.payment_type === pt.value
-                          ? "var(--forest)"
-                          : "var(--charcoal)",
-                    }}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${payDirectForm.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
-                      style={
-                        payDirectForm.payment_type === pt.value
-                          ? {
-                              borderColor: "var(--forest)",
-                              background: "var(--forest)",
-                            }
-                          : {}
-                      }
-                    >
-                      {payDirectForm.payment_type === pt.value && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-white m-auto mt-0.5" />
-                      )}
-                    </div>
-                    {pt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {payDirectForm.payment_type === "wallet_topup" && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium">
-                    Direct to specific scheme?
-                  </label>
-                  <button
-                    onClick={() =>
-                      setPayDirectForm((f) => ({
-                        ...f,
-                        is_directed: !f.is_directed,
-                        target_scheme_id: "",
-                      }))
-                    }
-                    className={`w-10 h-5 rounded-full transition-colors relative ${payDirectForm.is_directed ? "bg-forest-900" : "bg-gray-200"}`}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium mb-2">
+              What are you paying for?
+            </label>
+            <div className="grid grid-cols-1 gap-2">
+              {PAYMENT_TYPES.map((pt) => (
+                <button
+                  key={pt.value}
+                  type="button"
+                  onClick={() =>
+                    setPayDirectForm((f) => ({
+                      ...f,
+                      payment_type: pt.value as any,
+                      is_directed: false,
+                      target_scheme_id: "",
+                    }))
+                  }
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm text-left transition-all"
+                  style={{
+                    borderColor:
+                      payDirectForm.payment_type === pt.value
+                        ? "var(--forest)"
+                        : "#e2e8f0",
+                    background:
+                      payDirectForm.payment_type === pt.value
+                        ? "var(--forest-light)"
+                        : "#fff",
+                    color:
+                      payDirectForm.payment_type === pt.value
+                        ? "var(--forest)"
+                        : "var(--charcoal)",
+                  }}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${payDirectForm.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
                     style={
-                      payDirectForm.is_directed
-                        ? { background: "var(--forest)" }
+                      payDirectForm.payment_type === pt.value
+                        ? {
+                            borderColor: "var(--forest)",
+                            background: "var(--forest)",
+                          }
                         : {}
                     }
                   >
-                    <span
-                      className={`absolute w-4 h-4 bg-white rounded-full top-0.5 transition-transform shadow-sm ${payDirectForm.is_directed ? "translate-x-5" : "translate-x-0.5"}`}
-                    />
-                  </button>
-                </div>
-                {payDirectForm.is_directed && (
-                  <select
-                    value={payDirectForm.target_scheme_id}
-                    onChange={(e) =>
-                      setPayDirectForm((f) => ({
-                        ...f,
-                        target_scheme_id: e.target.value,
-                      }))
-                    }
-                    className="input-field"
-                  >
-                    <option value="">Select scheme…</option>
-                    {schemes
-                      .filter((s: any) => !s.is_compulsory)
-                      .map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
+                    {payDirectForm.payment_type === pt.value && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white m-auto mt-0.5" />
+                    )}
+                  </div>
+                  {pt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {payDirectForm.payment_type === "wallet_topup" && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium">
+                  Direct to specific scheme?
+                </label>
+                <button
+                  onClick={() =>
+                    setPayDirectForm((f) => ({
+                      ...f,
+                      is_directed: !f.is_directed,
+                      target_scheme_id: "",
+                    }))
+                  }
+                  className={`w-10 h-5 rounded-full transition-colors relative ${payDirectForm.is_directed ? "bg-forest-900" : "bg-gray-200"}`}
+                  style={
+                    payDirectForm.is_directed
+                      ? { background: "var(--forest)" }
+                      : {}
+                  }
+                >
+                  <span
+                    className={`absolute w-4 h-4 bg-white rounded-full top-0.5 transition-transform shadow-sm ${payDirectForm.is_directed ? "translate-x-5" : "translate-x-0.5"}`}
+                  />
+                </button>
+              </div>
+              {payDirectForm.is_directed && (
+                <select
+                  value={payDirectForm.target_scheme_id}
+                  onChange={(e) =>
+                    setPayDirectForm((f) => ({
+                      ...f,
+                      target_scheme_id: e.target.value,
+                    }))
+                  }
+                  className="input-field"
+                >
+                  <option value="">Select scheme…</option>
+                  {schemes
+                    .filter((s: any) => !s.is_compulsory)
+                    .map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {payDirectForm.payment_type === "loan_repayment" &&
+            activeLoan?.has_active_loan &&
+            activeLoan.loans.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium mb-2">
+                  Which loan?
+                </label>
+                <select
+                  value={payDirectForm.target_loan_id}
+                  onChange={(e) =>
+                    setPayDirectForm((f) => ({
+                      ...f,
+                      target_loan_id: e.target.value,
+                    }))
+                  }
+                  className="input-field"
+                >
+                  {activeLoan.loans.map((l: any) => (
+                    <option key={l.id} value={l.id}>
+                      Outstanding {formatCurrency(l.outstanding_balance)} — due{" "}
+                      {l.due_date}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          {payDirectForm.payment_type === "loan_repayment" &&
+            activeLoan?.has_active_loan && (
+              <div
+                className="p-3 rounded-xl text-xs"
+                style={{
+                  background: "var(--forest-light)",
+                  color: "var(--forest)",
+                }}
+              >
+                Repaying loan — Outstanding:{" "}
+                <strong>
+                  {formatCurrency(
+                    (
+                      activeLoan.loans.find(
+                        (l: any) => l.id === payDirectForm.target_loan_id,
+                      ) ?? activeLoan.loan
+                    ).outstanding_balance,
+                  )}
+                </strong>
+              </div>
+            )}
+          {payDirectForm.payment_type === "loan_repayment" &&
+            !activeLoan?.has_active_loan && (
+              <div
+                className="p-3 rounded-xl text-xs"
+                style={{ background: "#fee2e2", color: "#991b1b" }}
+              >
+                No active loan found. Contact the admin if you believe this is
+                an error.
               </div>
             )}
 
-            {payDirectForm.payment_type === "loan_repayment" &&
-              activeLoan?.has_active_loan &&
-              activeLoan.loans.length > 1 && (
-                <div>
-                  <label className="block text-xs font-medium mb-2">
-                    Which loan?
-                  </label>
-                  <select
-                    value={payDirectForm.target_loan_id}
-                    onChange={(e) =>
-                      setPayDirectForm((f) => ({
-                        ...f,
-                        target_loan_id: e.target.value,
-                      }))
-                    }
-                    className="input-field"
-                  >
-                    {activeLoan.loans.map((l: any) => (
-                      <option key={l.id} value={l.id}>
-                        Outstanding {formatCurrency(l.outstanding_balance)} —
-                        due {l.due_date}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            {payDirectForm.payment_type === "loan_repayment" &&
-              activeLoan?.has_active_loan && (
-                <div
-                  className="p-3 rounded-xl text-xs"
-                  style={{
-                    background: "var(--forest-light)",
-                    color: "var(--forest)",
-                  }}
-                >
-                  Repaying loan — Outstanding:{" "}
-                  <strong>
-                    {formatCurrency(
-                      (
-                        activeLoan.loans.find(
-                          (l: any) => l.id === payDirectForm.target_loan_id,
-                        ) ?? activeLoan.loan
-                      ).outstanding_balance,
-                    )}
-                  </strong>
-                </div>
-              )}
-            {payDirectForm.payment_type === "loan_repayment" &&
-              !activeLoan?.has_active_loan && (
-                <div
-                  className="p-3 rounded-xl text-xs"
-                  style={{ background: "#fee2e2", color: "#991b1b" }}
-                >
-                  No active loan found. Contact the admin if you believe this is
-                  an error.
-                </div>
-              )}
-
-            <div>
-              <label className="block text-xs font-medium mb-2">
-                Amount to Pay (₦) *
-              </label>
-              <input
-                type="number"
-                value={payDirectForm.amount}
-                onChange={(e) =>
-                  setPayDirectForm((f) => ({ ...f, amount: e.target.value }))
-                }
-                placeholder="e.g. 45000"
-                className="input-field"
-              />
-            </div>
-
-            <p className="text-xs text-gray-400">
-              You'll be taken to a secure Paystack checkout to pay by card, bank
-              transfer, or USSD. Your account is credited immediately on
-              success.
-            </p>
-
-            <button
-              disabled={!canPayDirect || payDirectBusy || !paystackReady}
-              className="btn-primary flex items-center justify-center gap-2"
-            >
-              {payDirectBusy ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : !paystackReady ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Loading payment widget…
-                </>
-              ) : (
-                <>
-                  <Zap size={16} /> Continue to Pay{" "}
-                  {payDirectForm.amount
-                    ? formatCurrency(parseFloat(payDirectForm.amount))
-                    : ""}
-                </>
-              )}
-            </button>
+          <div>
+            <label className="block text-xs font-medium mb-2">
+              Amount to Pay (₦) *
+            </label>
+            <input
+              type="number"
+              value={payDirectForm.amount}
+              onChange={(e) =>
+                setPayDirectForm((f) => ({ ...f, amount: e.target.value }))
+              }
+              placeholder="e.g. 45000"
+              className="input-field"
+            />
           </div>
-        </form>
+
+          <p className="text-xs text-gray-400">
+            You'll be taken to a secure Paystack checkout to pay by card, bank
+            transfer, or USSD. Your account is credited immediately on success.
+          </p>
+
+          <button
+            onClick={() => setConfirmingPayDirect(true)}
+            disabled={!canPayDirect || payDirectBusy}
+            className="btn-primary flex items-center justify-center gap-2"
+          >
+            {payDirectBusy ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <Zap size={16} /> Continue to Pay{" "}
+                {payDirectForm.amount
+                  ? formatCurrency(parseFloat(payDirectForm.amount))
+                  : ""}
+              </>
+            )}
+          </button>
+        </div>
       </BottomSheet>
 
       {/* ── Declare Payment Sheet ─────────────────────────────────────────── */}
