@@ -1,9 +1,8 @@
 "use client";
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { memberApi } from "../../lib/api/member";
-import { useAuthStore } from "../../lib/stores/auth.store";
+import { IPaydirect, memberApi } from "../../lib/api/member";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { BottomSheet } from "../../components/shared/BottomSheet";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
@@ -16,8 +15,10 @@ import {
   paymentTypeLabel,
 } from "../../lib/utils/format";
 import toast from "react-hot-toast";
-import { Receipt, Plus, Upload, ExternalLink, Info, Zap } from "lucide-react";
-import type { ManualPayment } from "../../lib/types";
+import { Receipt, Plus, Upload, Info, Zap } from "lucide-react";
+import type { ManualPayment, PaymentType } from "../../lib/types";
+import usePaystackPayment from "../../hooks/usePaystackPayment";
+import SpecifyScheme from "../../components/payment/SpecifyScheme";
 
 const PAYMENT_TYPES = [
   { value: "subscription_payment", label: "Monthly Subscription" },
@@ -26,13 +27,17 @@ const PAYMENT_TYPES = [
 ];
 
 function PaymentsPageInner() {
-  const qc = useQueryClient();
-  const user = useAuthStore((s) => s.user);
+  const [payDirectForm, setPayDirectForm] = useState({
+    payment_type: "subscription_payment" as PaymentType,
+    amount: "",
+    is_directed: false,
+    target_scheme_id: "",
+    target_loan_id: "",
+  });
 
+  const qc = useQueryClient();
   const [showDeclare, setShowDeclare] = useState(false);
-  const [showPayDirect, setShowPayDirect] = useState(false);
   const [confirmingDeclare, setConfirmingDeclare] = useState(false);
-  const [confirmingPayDirect, setConfirmingPayDirect] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
@@ -44,21 +49,54 @@ function PaymentsPageInner() {
     target_scheme_id: "",
     target_loan_id: "",
   });
+
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
-  const [payDirectForm, setPayDirectForm] = useState({
-    payment_type: "subscription_payment" as
-      | "subscription_payment"
-      | "loan_repayment"
-      | "wallet_topup",
-    amount: "",
-    is_directed: false,
-    target_scheme_id: "",
-    target_loan_id: "",
+  const { data: loanData } = useQuery({
+    queryKey: ["active-loan"],
+    queryFn: () =>
+      memberApi.getActiveLoan
+        ? memberApi.getActiveLoan()
+        : Promise.resolve(null),
+    enabled:
+      (showDeclare && form.payment_type === "loan_repayment") ||
+      payDirectForm.payment_type === "loan_repayment",
   });
+  const activeLoan = loanData?.data?.data ?? loanData?.data;
+
+  // ── Pay Direct (Paystack) ───────────────────────────────────────────────
+
+  const payload: IPaydirect = {
+    payment_type: payDirectForm.payment_type,
+    amount: parseFloat(payDirectForm.amount),
+    is_directed:
+      payDirectForm.payment_type === "wallet_topup"
+        ? payDirectForm.is_directed
+        : undefined,
+    target_scheme_id:
+      payDirectForm.payment_type === "wallet_topup" && payDirectForm.is_directed
+        ? payDirectForm.target_scheme_id
+        : undefined,
+    target_loan_id:
+      payDirectForm.payment_type === "loan_repayment"
+        ? payDirectForm.target_loan_id || activeLoan?.loan?.id
+        : undefined,
+    month_label: new Date().toLocaleString("default", {
+      month: "long",
+      year: "numeric",
+    }),
+  };
+
+  const {
+    confirmingPayDirect,
+    isPaystackPending,
+    showPayDirect,
+    paystackMutate,
+    setConfirmingPayDirect,
+    setShowPayDirect,
+  } = usePaystackPayment(setPayDirectForm);
 
   // (no auto-open on navigation — member chooses their own action)
-
   const { data: paymentsData, isLoading } = useQuery({
     queryKey: ["my-payments"],
     queryFn: () => memberApi.getPayments(),
@@ -74,18 +112,6 @@ function PaymentsPageInner() {
       (showPayDirect && payDirectForm.payment_type === "wallet_topup"),
   });
   const schemes = schemesData?.data?.data ?? schemesData?.data ?? [];
-
-  const { data: loanData } = useQuery({
-    queryKey: ["active-loan"],
-    queryFn: () =>
-      memberApi.getActiveLoan
-        ? memberApi.getActiveLoan()
-        : Promise.resolve(null),
-    enabled:
-      (showDeclare && form.payment_type === "loan_repayment") ||
-      (showPayDirect && payDirectForm.payment_type === "loan_repayment"),
-  });
-  const activeLoan = loanData?.data?.data ?? loanData?.data;
 
   // A member can now hold more than one concurrent active loan — default
   // both forms to the first one whenever the list loads, but let the
@@ -153,59 +179,6 @@ function PaymentsPageInner() {
       !form.is_directed ||
       form.target_scheme_id);
 
-  // ── Pay Direct (Paystack) ───────────────────────────────────────────────
-  const initializeMutation = useMutation({
-    mutationFn: () =>
-      memberApi.initializePaystack({
-        payment_type: payDirectForm.payment_type,
-        amount: parseFloat(payDirectForm.amount),
-        is_directed:
-          payDirectForm.payment_type === "wallet_topup"
-            ? payDirectForm.is_directed
-            : undefined,
-        target_scheme_id:
-          payDirectForm.payment_type === "wallet_topup" &&
-          payDirectForm.is_directed
-            ? payDirectForm.target_scheme_id
-            : undefined,
-        target_loan_id:
-          payDirectForm.payment_type === "loan_repayment"
-            ? payDirectForm.target_loan_id || activeLoan?.loan?.id
-            : undefined,
-        month_label: new Date().toLocaleString("default", {
-          month: "long",
-          year: "numeric",
-        }),
-      }),
-    onSuccess: (res) => {
-      const data = res.data?.data ?? res.data;
-      const { authorization_url } = data;
-      if (!authorization_url) {
-        toast.error("Could not get payment link — please try again.");
-        setConfirmingPayDirect(false);
-        return;
-      }
-      // Backend already initialized with Paystack — open their hosted
-      // payment page. The webhook handles the result automatically;
-      // no manual verify call needed from the frontend.
-      setShowPayDirect(false);
-      setConfirmingPayDirect(false);
-      setPayDirectForm({
-        payment_type: "subscription_payment",
-        amount: "",
-        is_directed: false,
-        target_scheme_id: "",
-        target_loan_id: "",
-      });
-      toast.success("Opening payment page…");
-      window.open(authorization_url, "_blank", "noopener,noreferrer");
-    },
-    onError: (e: any) => {
-      toast.error(e.response?.data?.message ?? "Could not start payment");
-      setConfirmingPayDirect(false);
-    },
-  });
-
   const canPayDirect =
     payDirectForm.amount &&
     parseFloat(payDirectForm.amount) > 0 &&
@@ -214,8 +187,6 @@ function PaymentsPageInner() {
       payDirectForm.target_scheme_id) &&
     (payDirectForm.payment_type !== "loan_repayment" ||
       activeLoan?.has_active_loan);
-
-  const payDirectBusy = initializeMutation.isPending;
 
   const currentMonth = new Date().toLocaleString("default", {
     month: "long",
@@ -366,7 +337,7 @@ function PaymentsPageInner() {
                   }}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${payDirectForm.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
+                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${payDirectForm.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
                     style={
                       payDirectForm.payment_type === pt.value
                         ? {
@@ -387,53 +358,12 @@ function PaymentsPageInner() {
           </div>
 
           {payDirectForm.payment_type === "wallet_topup" && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium">
-                  Direct to specific scheme?
-                </label>
-                <button
-                  onClick={() =>
-                    setPayDirectForm((f) => ({
-                      ...f,
-                      is_directed: !f.is_directed,
-                      target_scheme_id: "",
-                    }))
-                  }
-                  className={`w-10 h-5 rounded-full transition-colors relative ${payDirectForm.is_directed ? "bg-forest-900" : "bg-gray-200"}`}
-                  style={
-                    payDirectForm.is_directed
-                      ? { background: "var(--forest)" }
-                      : {}
-                  }
-                >
-                  <span
-                    className={`absolute w-4 h-4 bg-white rounded-full top-0.5 transition-transform shadow-sm ${payDirectForm.is_directed ? "translate-x-5" : "translate-x-0.5"}`}
-                  />
-                </button>
-              </div>
-              {payDirectForm.is_directed && (
-                <select
-                  value={payDirectForm.target_scheme_id}
-                  onChange={(e) =>
-                    setPayDirectForm((f) => ({
-                      ...f,
-                      target_scheme_id: e.target.value,
-                    }))
-                  }
-                  className="input-field"
-                >
-                  <option value="">Select scheme…</option>
-                  {schemes
-                    .filter((s: any) => !s.is_compulsory)
-                    .map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                </select>
-              )}
-            </div>
+            <SpecifyScheme
+              setValueForm={setPayDirectForm}
+              showPayment={payDirectForm.payment_type === "wallet_topup"}
+              value_target={payDirectForm.target_scheme_id}
+              key={"payDirect"}
+            />
           )}
 
           {payDirectForm.payment_type === "loan_repayment" &&
@@ -516,10 +446,10 @@ function PaymentsPageInner() {
 
           <button
             onClick={() => setConfirmingPayDirect(true)}
-            disabled={!canPayDirect || payDirectBusy}
+            disabled={!canPayDirect || isPaystackPending}
             className="btn-primary flex items-center justify-center gap-2"
           >
-            {payDirectBusy ? (
+            {isPaystackPending ? (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
@@ -578,7 +508,7 @@ function PaymentsPageInner() {
                   }}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${form.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
+                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${form.payment_type === pt.value ? "border-forest-900" : "border-gray-300"}`}
                     style={
                       form.payment_type === pt.value
                         ? {
@@ -600,48 +530,12 @@ function PaymentsPageInner() {
 
           {/* Directed top-up toggle */}
           {form.payment_type === "wallet_topup" && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium">
-                  Direct to specific scheme?
-                </label>
-                <button
-                  onClick={() =>
-                    setForm((f) => ({
-                      ...f,
-                      is_directed: !f.is_directed,
-                      target_scheme_id: "",
-                    }))
-                  }
-                  className={`w-10 h-5 rounded-full transition-colors relative ${form.is_directed ? "bg-forest-900" : "bg-gray-200"}`}
-                  style={
-                    form.is_directed ? { background: "var(--forest)" } : {}
-                  }
-                >
-                  <span
-                    className={`absolute w-4 h-4 bg-white rounded-full top-0.5 transition-transform shadow-sm ${form.is_directed ? "translate-x-5" : "translate-x-0.5"}`}
-                  />
-                </button>
-              </div>
-              {form.is_directed && (
-                <select
-                  value={form.target_scheme_id}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, target_scheme_id: e.target.value }))
-                  }
-                  className="input-field"
-                >
-                  <option value="">Select scheme…</option>
-                  {schemes
-                    .filter((s: any) => !s.is_compulsory)
-                    .map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                </select>
-              )}
-            </div>
+            <SpecifyScheme
+              setValueForm={setForm}
+              showPayment={form.payment_type === "wallet_topup"}
+              value_target={form.target_scheme_id}
+              key={"declareDirect"}
+            />
           )}
 
           {/* Active loan notice */}
@@ -813,11 +707,11 @@ function PaymentsPageInner() {
       <ConfirmDialog
         open={confirmingPayDirect}
         onClose={() => setConfirmingPayDirect(false)}
-        onConfirm={() => initializeMutation.mutate()}
+        onConfirm={() => paystackMutate(payload)}
         title="Proceed to payment?"
         message={`You'll be taken to a secure Paystack checkout to pay ${payDirectForm.amount ? formatCurrency(parseFloat(payDirectForm.amount)) : ""}. Continue?`}
         confirmLabel="Yes, Continue"
-        loading={initializeMutation.isPending}
+        loading={isPaystackPending}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 "use client";
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { memberApi } from "../../lib/api/member";
 import { useAuthStore } from "../../lib/stores/auth.store";
@@ -271,7 +271,7 @@ export default function DashboardPage() {
             Recent Activity
           </h2>
           <Link
-            href="/savings#transactions"
+            href="/transactions"
             className="text-xs flex items-center gap-1"
             style={{ color: "var(--forest)" }}
           >

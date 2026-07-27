@@ -1,5 +1,14 @@
 import api from './client'
 
+export interface IPaydirect{
+    payment_type: 'subscription_payment' | 'loan_repayment' | 'wallet_topup'
+    amount: number
+    is_directed?: boolean
+    target_loan_id?: string
+    target_scheme_id?: string
+    month_label?: string
+  }
+
 export const memberApi = {
   getProfile: () => api.get('/members/me'),
   updateProfile: (d: { email?: string; sms_opt_in?: boolean }) =>
@@ -26,14 +35,7 @@ export const memberApi = {
   getSchemes: () => api.get('/schemes'),
 
   // ── Pay Direct (Paystack) ──────────────────────────────────────────────
-  initializePaystack: (d: {
-    payment_type: 'subscription_payment' | 'loan_repayment' | 'wallet_topup'
-    amount: number
-    is_directed?: boolean
-    target_loan_id?: string
-    target_scheme_id?: string
-    month_label?: string
-  }) => api.post('/paystack/initialize', d),
+  initializePaystack: (d: IPaydirect) => api.post('/paystack/initialize', d),
   verifyPaystack: (reference: string) => api.get(`/paystack/verify/${reference}`),
   getPaystackTransactions: () => api.get('/paystack/my-transactions'),
 }
