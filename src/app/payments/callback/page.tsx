@@ -1,3 +1,4 @@
+"use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoadingSpinner } from "../../../components/shared/LoadingSpinner";
 import useVerifyPayments from "../../../hooks/useVerifyPayments";
