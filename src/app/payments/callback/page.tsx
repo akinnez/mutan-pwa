@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoadingSpinner } from "../../../components/shared/LoadingSpinner";
 import useVerifyPayments from "../../../hooks/useVerifyPayments";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 
-export default function Callback() {
+function CallbackPage() {
   const params = useSearchParams();
   const router = useRouter();
   const verify = useVerifyPayments();
@@ -21,4 +21,12 @@ export default function Callback() {
     verify.mutate(reference);
   }, []);
   return <LoadingSpinner />;
+}
+
+export default function Callback() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <CallbackPage />
+    </Suspense>
+  );
 }
