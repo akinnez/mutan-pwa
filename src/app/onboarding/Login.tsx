@@ -1,4 +1,5 @@
 import { authApi } from "../../lib/api/auth";
+import { formatToNigeriaInternational as formatPhoneNumber } from "../../lib/utils/format";
 import { Step } from "../../types/steps";
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
@@ -13,6 +14,7 @@ interface IOnboardingVerify {
   idNumber: string;
   loading: boolean;
   setIdNumber: React.Dispatch<React.SetStateAction<string>>;
+  setIsFirstTime: React.Dispatch<React.SetStateAction<boolean>>;
   startResendTimer: () => void;
 }
 
@@ -26,10 +28,10 @@ function Login({
   setLoading,
   setStep,
   startResendTimer,
+  setIsFirstTime,
 }: IOnboardingVerify) {
   const [adminWhatsapp, setAdminWhatsapp] = useState("");
   const [notFound, setNotFound] = useState(false);
-  const [isFirstTime, setIsFirstTime] = useState(false);
 
   // ── STEP 1: Verify identity ──────────────────────────────────────────────
   const handleVerifyIdentity = async () => {
@@ -40,10 +42,13 @@ function Login({
     setLoading(true);
     try {
       const { data } = await authApi.verifyIdentity({
-        phone_number: phone,
+        phone_number: formatPhoneNumber(phone),
         id_number: idNumber,
       });
+
       const payload = data.data ?? data;
+      console.log(payload);
+
       if (!payload.verified) {
         setNotFound(true);
         setAdminWhatsapp(payload.admin_whatsapp_url ?? "");
@@ -51,11 +56,14 @@ function Login({
       }
       setIsFirstTime(payload.is_first_time);
       // Request OTP
-      await authApi.requestOtp(phone);
+
+      await authApi.requestOtp(formatPhoneNumber(phone), payload.is_first_time);
       startResendTimer();
-      setSetupToken("", phone);
+      setSetupToken("", formatPhoneNumber(phone));
       setStep("otp");
-      toast.success(`OTP sent to ${phone.slice(0, 4)}****${phone.slice(-3)}`);
+      toast.success(
+        `OTP sent to ${formatPhoneNumber(phone).slice(0, 4)}****${formatPhoneNumber(phone).slice(-3)}`,
+      );
     } catch (e: any) {
       toast.error(e.response?.data?.message ?? "Verification failed");
     } finally {
@@ -108,6 +116,7 @@ function Login({
             <input
               type="tel"
               value={phone}
+              maxLength={11}
               onChange={(e) => {
                 setPhone(e.target.value);
                 setNotFound(false);
@@ -127,7 +136,7 @@ function Login({
                 setIdNumber(e.target.value);
                 setNotFound(false);
               }}
-              placeholder="e.g. GOV/OY/2019/001 or MUTAN-2024-0001"
+              placeholder="e.g. GOV/OY/2019/001 or MS001"
               className="input-field"
             />
             <p className="text-xs text-gray-400 mt-2">

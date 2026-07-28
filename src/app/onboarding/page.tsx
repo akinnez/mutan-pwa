@@ -11,6 +11,7 @@ import ReturningLogin from "./ReturningLogin";
 import OTP from "./OTP";
 import ForgotPasswordOTP from "./ForgotPasswordOTP";
 import ForgotReset from "./ForgotReset";
+import { formatToNigeriaInternational } from "../../lib/utils/format";
 
 export default function OnboardingPage() {
   const { setAuth, setSetupToken, setupToken, onboardingPhone } =
@@ -20,6 +21,7 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState("");
   const [idNumber, setIdNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [isFirstTime, setIsFirstTime] = useState(false);
 
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,8 +49,13 @@ export default function OnboardingPage() {
     if (resendSeconds > 0) return;
     setLoading(true);
     try {
-      if (step === "forgot-otp") await authApi.forgotPassword(phone);
-      else await authApi.requestOtp(phone);
+      if (step === "forgot-otp")
+        await authApi.forgotPassword(formatToNigeriaInternational(phone));
+      else
+        await authApi.requestOtp(
+          formatToNigeriaInternational(phone),
+          isFirstTime,
+        );
       startResendTimer();
       toast.success("OTP resent");
     } catch (e: any) {
@@ -114,6 +121,7 @@ export default function OnboardingPage() {
               setLoading={setLoading}
               setStep={setStep}
               startResendTimer={startResendTimer}
+              setIsFirstTime={setIsFirstTime}
             />
           )}
 

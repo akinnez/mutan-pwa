@@ -69,3 +69,21 @@ export const paymentTypeLabel: Record<string, string> = {
   wallet_topup: 'Wallet Top-up',
   subscription_payment: 'Subscription Payment',
 }
+
+export function formatToNigeriaInternational(phoneNumber: string | number): string {
+  // Convert to string and strip out any spaces, hyphens, or non-digit characters
+  let cleaned = String(phoneNumber).trim().replace(/\D/g, '');
+
+  // If already prefixed with 234, ensure it's left intact
+  if (cleaned.startsWith('234')) {
+    return cleaned;
+  }
+
+  // If it starts with a local leading '0', strip it
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+
+  // Prepend country code
+  return `234${cleaned}`;
+}

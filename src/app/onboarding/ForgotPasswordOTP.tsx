@@ -3,6 +3,7 @@ import OtpGrid from "./OTPGrid";
 import toast from "react-hot-toast";
 import { Step } from "../../types/steps";
 import { authApi } from "../../lib/api/auth";
+import { formatToNigeriaInternational } from "../../lib/utils/format";
 
 interface IForgotOTP {
   forgotOtp: Array<string>;
@@ -37,7 +38,7 @@ export default function ForgotPasswordOTP({
     setLoading(true);
     try {
       const { data } = await authApi.confirmOtp({
-        phone_number: phone,
+        phone_number: formatToNigeriaInternational(phone),
         otp: otpStr,
       });
       const payload = data.data ?? data;

@@ -3,6 +3,7 @@ import { Step } from "../../types/steps";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { formatToNigeriaInternational } from "../../lib/utils/format";
 
 interface IReturningLogin {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
@@ -37,7 +38,10 @@ export default function ReturningLogin({
     }
     setLoading(true);
     try {
-      const { data } = await authApi.login({ phone_number: phone, password });
+      const { data } = await authApi.login({
+        phone_number: formatToNigeriaInternational(phone),
+        password,
+      });
       const payload = data.data ?? data;
       setAuth(payload.member);
       toast.success(`Welcome back, ${payload.member.full_name.split(" ")[0]}!`);
@@ -56,7 +60,7 @@ export default function ReturningLogin({
     }
     setLoading(true);
     try {
-      await authApi.forgotPassword(phone);
+      await authApi.forgotPassword(formatToNigeriaInternational(phone));
       startResendTimer();
       setStep("forgot-otp");
       toast.success("OTP sent");

@@ -27,7 +27,6 @@ export default function FirstTime({
 }: IFirstTime) {
   const router = useRouter();
   const [pin, setPin] = useState("");
-  const [email, setEmail] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // ── STEP 3a: First-time setup ────────────────────────────────────────────
@@ -58,7 +57,6 @@ export default function FirstTime({
         setup_token: setupToken!,
         password,
         pin,
-        email,
       });
       const payload = data.data ?? data;
       setAuth(payload.member);
@@ -85,20 +83,6 @@ export default function FirstTime({
         </p>
       </div>
       <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-medium mb-2">
-            Email Address
-          </label>
-          <div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g arrahman@example.com"
-              className="input-field pr-12"
-            />
-          </div>
-        </div>
         <div>
           <label className="block text-xs font-medium mb-2">Password</label>
           <div className="relative">

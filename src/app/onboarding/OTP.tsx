@@ -3,6 +3,8 @@ import { Step } from "../../types/steps";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import OtpGrid from "./OTPGrid";
+import { format } from "path";
+import { formatToNigeriaInternational } from "../../lib/utils/format";
 
 interface IOTPLogin {
   phone: string;
@@ -34,11 +36,11 @@ export default function OTP({
     setLoading(true);
     try {
       const { data } = await authApi.confirmOtp({
-        phone_number: phone,
+        phone_number: formatToNigeriaInternational(phone),
         otp: otpString,
       });
       const payload = data.data ?? data;
-      setSetupToken(payload.setup_token, phone);
+      setSetupToken(payload.setup_token, formatToNigeriaInternational(phone));
       if (payload.is_first_time) {
         setStep("setup");
       } else {
@@ -86,7 +88,7 @@ export default function OTP({
         <button
           onClick={handleResend}
           disabled={resendSeconds > 0}
-          className="font-medium"
+          className="font-medium cursor-pointer"
           style={{
             color: resendSeconds > 0 ? "#9ca3af" : "var(--forest)",
           }}

@@ -3,11 +3,11 @@ import api from './client'
 export const authApi = {
   verifyIdentity: (d: { phone_number: string; id_number: string }) =>
     api.post('/auth/verify-identity', d),
-  requestOtp: (phone_number: string) =>
-    api.post('/auth/request-otp', { phone_number }),
+  requestOtp: (phone_number: string, is_first_time: boolean) =>
+    api.post('/auth/request-otp', { phone_number, is_first_time }),
   confirmOtp: (d: { phone_number: string; otp: string }) =>
     api.post('/auth/confirm-otp', d),
-  setupCredentials: (d: { setup_token: string; password: string; pin: string, email:string }) =>
+  setupCredentials: (d: { setup_token: string; password: string; pin: string }) =>
     api.post('/auth/setup-credentials', d),
   login: (d: { phone_number: string; password: string }) =>
     api.post('/auth/login', d),
