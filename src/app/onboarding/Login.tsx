@@ -57,7 +57,12 @@ function Login({
       setIsFirstTime(payload.is_first_time);
       // Request OTP
 
-      await authApi.requestOtp(formatPhoneNumber(phone), payload.is_first_time);
+      const { data: otpData } = await authApi.requestOtp(
+        formatPhoneNumber(phone),
+        payload.is_first_time,
+      );
+      console.log(otpData.data);
+
       startResendTimer();
       setSetupToken("", formatPhoneNumber(phone));
       setStep("otp");
